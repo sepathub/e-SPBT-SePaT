@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Pengurusan SPBT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Nunito', sans-serif; 
+            background-color: #f0fdf4;
+        }
+
+        .tab-content {
+            display: none;
+            animation: bounceInUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes bounceInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg) scale(1); }
+            50% { transform: translateY(-20px) rotate(10deg) scale(1.1); }
+            100% { transform: translateY(0px) rotate(0deg) scale(1); }
+        }
+        @keyframes float-reverse {
+            0% { transform: translateY(0px) rotate(0deg) scale(1); }
+            50% { transform: translateY(20px) rotate(-10deg) scale(1.1); }
+            100% { transform: translateY(0px) rotate(0deg) scale(1); }
+        }
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-delayed { animation: float-reverse 7s ease-in-out infinite 2s; }
+        .animate-float-fast { animation: float 4s ease-in-out infinite 1s; }
+        .animate-pulse-soft { animation: pulse-soft 2s infinite ease-in-out; }
+
+        /* CSS Tree Structure for Organization Chart */
+        .org-chart * { transition: all 0.3s; }
+        .org-chart ul {
+            padding-top: 20px; position: relative;
+            display: flex; justify-content: center;
+        }
+        .org-chart li {
+            float: left; text-align: center;
+            list-style-type: none;
+            position: relative;
+            padding: 20px 8px 0 8px;
+        }
+        .org-chart li::before, .org-chart li::after {
+            content: ''; position: absolute; top: 0; right: 50%;
+            border-top: 3px solid #84cc16;
+            width: 50%; height: 20px;
+        }
+        .org-chart li::after {
+            right: auto; left: 50%;
+            border-left: 3px solid #84cc16;
+        }
+        .org-chart li:only-child::after, .org-chart li:only-child::before { display: none; }
+        .org-chart li:only-child { padding-top: 0; }
+        .org-chart li:first-child::before, .org-chart li:last-child::after { border: 0 none; }
+        .org-chart li:last-child::before {
+            border-right: 3px solid #84cc16;
+            border-radius: 0 10px 0 0;
+        }
+        .org-chart li:first-child::after { border-radius: 10px 0 0 0; }
+        .org-chart ul ul::before {
+            content: ''; position: absolute; top: 0; left: 50%;
+            border-left: 3px solid #84cc16;
+            width: 0; height: 20px;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body:not(.qr-print-mode) { background: white; }
+            body:not(.qr-print-mode) #main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+            body:not(.qr-print-mode) .shadow-sm, body:not(.qr-print-mode) .shadow-md, body:not(.qr-print-mode) .shadow-lg { box-shadow: none !important; border: 1px solid #e2e8f0; }
+            
+            body.qr-print-mode nav, body.qr-print-mode header, body.qr-print-mode main, body.qr-print-mode #toast-container, body.qr-print-mode .bg-floating-icons { display: none !important; }
+            body.qr-print-mode { background: white; margin: 0; padding: 20px; }
+            body.qr-print-mode #qr-print-container { 
+                display: grid !important; 
+                grid-template-columns: repeat(4, 1fr); 
+                gap: 15px; 
+                width: 100%; 
+            }
+        }
+
+        #qr-print-container { display: none; }
+        .qr-label { 
+            border: 2px dashed #cbd5e1; 
+            padding: 15px; 
+            text-align: center; 
+            border-radius: 8px; 
+            page-break-inside: avoid;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #toast-container {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+        }
+
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #f0fdf4; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb { background: #a3e635; border-radius: 5px; border: 2px solid #f0fdf4; }
+        ::-webkit-scrollbar-thumb:hover { background: #84cc16; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased flex flex-col h-screen overflow-hidden relative selection:bg-lime-300 selection:text-emerald-900">
+
+    <div class="bg-floating-icons fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div class="absolute top-24 left-10 text-lime-400 opacity-20 animate-float text-6xl"><i class="fa-solid fa-leaf"></i></div>
+        <div class="absolute bottom-20 right-10 text-emerald-400 opacity-20 animate-float-delayed text-7xl"><i class="fa-solid fa-book-open"></i></div>
+        <div class="absolute top-1/3 right-1/4 text-green-400 opacity-30 animate-float-fast text-4xl"><i class="fa-solid fa-seedling"></i></div>
+        <div class="absolute bottom-1/3 left-1/4 text-lime-500 opacity-20 animate-float-delayed text-5xl"><i class="fa-solid fa-star"></i></div>
+        <div class="absolute top-10 right-10 text-green-300 opacity-20 animate-float text-5xl"><i class="fa-solid fa-apple-whole"></i></div>
+    </div>
+
+    <header class="bg-gradient-to-r from-emerald-600 via-green-600 to-lime-500 shadow-xl z-50 flex-shrink-0 relative">
+        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
+        <div class="max-w-[1400px] mx-auto px-2 sm:px-4 lg:px-6 relative z-10">
+            <div class="flex items-center justify-between h-20">
+                
+                <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <div class="bg-white/20 p-2 sm:p-2.5 rounded-2xl text-white backdrop-blur-md border-2 border-white/40 shadow-sm animate-pulse-soft">
+                        <i class="fa-solid fa-book-open text-xl sm:text-2xl text-lime-100"></i>
+                    </div>
+                    <div class="flex flex-col justify-center text-white">
+                        <h1 class="text-sm sm:text-lg md:text-xl font-black tracking-wide leading-tight drop-shadow-md whitespace-nowrap">e-SPBT</h1>
+                        <p class="text-[9px] sm:text-[10px] md:text-xs font-bold text-lime-100 uppercase tracking-wider leading-none whitespace-nowrap">SK Simpang Empat</p>
+                    </div>
+                </div>
+
+                <nav class="hidden md:flex items-center gap-1 lg:gap-2 flex-1 justify-center px-1" id="desktop-nav">
+                    <!-- Dynamic nav buttons rendered by role -->
+                </nav>
+
+                <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <div id="db-status" class="hidden xl:flex items-center gap-1.5 text-xs bg-black/20 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-full text-white font-bold shadow-inner">
+                        <i class="fa-solid fa-circle-notch fa-spin text-lime-300"></i> Menyambung...
+                    </div>
+                    <button onclick="window.initDataLoad(true)" class="hidden sm:flex items-center justify-center w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 border border-white/40 text-white transition-all shadow-sm group" title="Segarkan Data (Sync)">
+                        <i class="fa-solid fa-arrows-rotate group-hover:rotate-180 transition-transform duration-500"></i>
+                    </button>
+                    
+                    <div class="flex items-center gap-2 pl-2 sm:pl-3 border-l border-white/30 cursor-pointer group" onclick="window.openRoleModal()">
+                        <div class="text-right hidden sm:block">
+                            <p class="font-extrabold text-white text-xs sm:text-sm leading-tight drop-shadow-sm whitespace-nowrap" id="user-role-label">Paparan Umum</p>
+                            <p class="text-lime-200 text-[9px] font-black uppercase tracking-wider leading-tight whitespace-nowrap">Tukar Mod <i class="fa-solid fa-caret-down ml-0.5"></i></p>
+                        </div>
+                        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white border-2 border-lime-200 shadow-md p-0.5 flex items-center justify-center text-emerald-600 font-bold text-xs sm:text-sm transform group-hover:rotate-12 group-hover:scale-110 transition-all flex-shrink-0" id="user-avatar-initials">
+                            U
+                        </div>
+                    </div>
+                    <button id="mobile-menu-btn" class="md:hidden text-white hover:text-lime-200 focus:outline-none p-2 bg-white/10 rounded-xl border border-white/20">
+                        <i class="fa-solid fa-bars text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobile-menu" class="hidden md:hidden bg-emerald-800 border-t border-emerald-700 px-4 pt-2 pb-4 space-y-2 relative z-50 shadow-2xl absolute w-full left-0">
+            <!-- Dynamic mobile nav items -->
+        </div>
+    </header>
+
+    <main id="main-content" class="flex-1 flex flex-col h-full overflow-y-auto relative z-10 custom-scrollbar">
+        <div class="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto w-full relative">
+            <div class="print-header hidden text-green-800 font-bold">Laporan Agihan SPBT Sekolah Rendah</div>
+            
+            <div class="flex items-center justify-between mb-8 no-print bg-white/60 backdrop-blur-md p-4 rounded-3xl shadow-sm border border-white/50">
+                <h2 id="page-title" class="text-xl md:text-2xl font-black text-emerald-800 flex items-center gap-3 drop-shadow-sm">
+                    <i class="fa-solid fa-sparkles text-lime-500"></i> Dashboard Utama
+                </h2>
+                <div class="text-xs md:text-sm text-emerald-700 bg-lime-100/50 px-4 py-2 rounded-full border border-lime-200 font-extrabold shadow-sm flex items-center gap-2">
+                    <i class="fa-regular fa-calendar-days text-lime-600"></i> Sesi 2026/2027
+                </div>
+            </div>
+
+            <!-- Tab 1: Dashboard -->
+            <div id="dashboard" class="tab-content active">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-emerald-100 flex items-center gap-5 transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-emerald-300 group relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-emerald-100 text-7xl z-0"><i class="fa-solid fa-swatchbook"></i></div>
+                        <div class="bg-gradient-to-br from-emerald-400 to-emerald-600 w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 group-hover:scale-110 group-hover:rotate-6 transition-all relative z-10 flex-shrink-0">
+                            <i class="fa-solid fa-swatchbook text-2xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <p class="text-[10px] text-emerald-600/80 font-black uppercase tracking-widest mb-1">Keseluruhan</p>
+                            <p class="text-3xl font-black text-emerald-900 leading-none" id="dash-total-books">0</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-lime-100 flex items-center gap-5 transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-lime-300 group relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-lime-100 text-7xl z-0"><i class="fa-solid fa-hands-holding-child"></i></div>
+                        <div class="bg-gradient-to-br from-lime-400 to-lime-600 w-16 h-16 rounded-2xl flex items-center justify-center text-emerald-900 shadow-lg shadow-lime-200 group-hover:scale-110 group-hover:rotate-6 transition-all relative z-10 flex-shrink-0">
+                            <i class="fa-solid fa-hands-holding-child text-2xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <p class="text-[10px] text-lime-700/80 font-black uppercase tracking-widest mb-1">Telah Diagih</p>
+                            <p class="text-3xl font-black text-emerald-900 leading-none" id="dash-distributed">0</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-amber-100 flex items-center gap-5 transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-amber-300 group relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-amber-100 text-7xl z-0"><i class="fa-solid fa-box-open"></i></div>
+                        <div class="bg-gradient-to-br from-amber-400 to-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-200 group-hover:scale-110 group-hover:-rotate-6 transition-all relative z-10 flex-shrink-0">
+                            <i class="fa-solid fa-box-open text-2xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <p class="text-[10px] text-amber-600/80 font-black uppercase tracking-widest mb-1">Stok BOSS</p>
+                            <p class="text-3xl font-black text-emerald-900 leading-none" id="dash-boss-stock">0</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white/80 backdrop-blur-sm p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-rose-100 flex items-center gap-5 transform transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:border-rose-300 group relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 text-rose-100 text-7xl z-0"><i class="fa-solid fa-heart-crack"></i></div>
+                        <div class="bg-gradient-to-br from-rose-400 to-red-500 w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-200 group-hover:scale-110 group-hover:rotate-6 transition-all relative z-10 flex-shrink-0">
+                            <i class="fa-solid fa-heart-crack text-2xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <p class="text-[10px] text-rose-600/80 font-black uppercase tracking-widest mb-1">Rosak/Hilang</p>
+                            <p class="text-3xl font-black text-emerald-900 leading-none" id="dash-damaged">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border-2 border-emerald-50 relative overflow-hidden">
+                        <div class="absolute right-0 top-0 w-64 h-64 bg-lime-100 rounded-full blur-3xl opacity-30 -mr-20 -mt-20"></div>
+                        <h3 class="text-lg font-black text-emerald-900 mb-8 flex items-center gap-3 relative z-10">
+                            <div class="p-2 bg-lime-100 text-lime-600 rounded-xl"><i class="fa-solid fa-chart-column"></i></div> Status Pengagihan Mengikut Tahun
+                        </h3>
+                        <div class="space-y-6 relative z-10" id="dashboard-progress-container"></div>
+                    </div>
+                    
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border-2 border-emerald-50">
+                        <h3 class="text-lg font-black text-emerald-900 mb-6 flex items-center gap-3">
+                            <div class="p-2 bg-blue-100 text-blue-600 rounded-xl"><i class="fa-solid fa-bullhorn"></i></div> Pengumuman
+                        </h3>
+                        <div class="space-y-4" id="announcement-container">
+                            <div class="p-5 text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin"></i> Memuatkan pengumuman...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Carta Organisasi with 3-3-1 Layout Arrangement and Class Teachers -->
+            <div id="carta" class="tab-content">
+                <div class="bg-white p-6 md:p-10 rounded-3xl shadow-sm border-2 border-emerald-50 overflow-x-auto flex justify-center items-center min-h-[75vh]">
+                    <div class="org-chart min-w-[1400px] pb-10 px-4">
+                        <ul>
+                            <li>
+                                <div class="bg-gradient-to-b from-emerald-500 to-lime-500 text-white p-6 rounded-3xl shadow-xl inline-block min-w-[240px] transform hover:scale-105 transition-transform duration-300 border-4 border-white">
+                                    <div class="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 flex items-center justify-center text-emerald-500 text-3xl shadow-inner transform rotate-3"><i class="fa-solid fa-user-tie"></i></div>
+                                    <p class="font-black text-base">Guru Besar</p>
+                                    <p class="text-[10px] text-lime-100 font-bold tracking-widest uppercase mt-1">Tuan Haji Anuar B Ismail</p>
+                                </div>
+                                <ul>
+                                    <li>
+                                        <div class="bg-white border-2 border-emerald-300 p-5 rounded-3xl shadow-lg inline-block min-w-[220px] mt-6 transform hover:scale-105 transition-transform duration-300 relative">
+                                            <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-xl border-4 border-white shadow-sm"><i class="fa-solid fa-user"></i></div>
+                                            <p class="font-black text-emerald-900 text-sm mt-4">PK HEM</p>
+                                            <p class="text-[10px] text-emerald-600 font-extrabold uppercase tracking-widest mt-1">Puan Haniza Binti Senin</p>
+                                        </div>
+                                        <ul>
+                                            <li>
+                                                <div class="bg-lime-50 border-2 border-lime-300 p-5 rounded-3xl shadow-md inline-block min-w-[220px] mt-6 transform hover:scale-105 transition-transform duration-300 relative">
+                                                    <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 w-12 h-12 bg-lime-200 rounded-full flex items-center justify-center text-lime-700 text-xl border-4 border-white shadow-sm font-black text-xs">CA</div>
+                                                    <p class="font-black text-emerald-900 text-sm mt-4">Cikgu Amni Afiqah</p>
+                                                    <p class="text-[10px] text-lime-600 font-extrabold uppercase tracking-widest mt-1">Penyelaras SPBT</p>
+                                                </div>
+                                                <!-- Row 1: Tahun 1, Tahun 2, Tahun 3 -->
+                                                <ul>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 1</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">1 Setia</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">1 Ikhlas</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 2</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">2 Maju</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">2 Perkasa</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 3</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">3 Aktif</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">3 Naim</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                </ul>
+                                                <!-- Row 2: Tahun 4, Tahun 5, Tahun 6 -->
+                                                <ul>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 4</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">4 Gigih</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">4 Ehsan</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 5</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">5 Mahir</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">5 Pintar</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">Tahun 6</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">6 Arif</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[110px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">6 Tekun</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                </ul>
+                                                <!-- Row 3: PPKI -->
+                                                <ul>
+                                                    <li>
+                                                        <div class="bg-emerald-900 text-white px-4 py-3 rounded-2xl shadow-md inline-block min-w-[130px] mt-6">
+                                                            <p class="font-black text-xs uppercase tracking-wider text-lime-300">PPKI</p>
+                                                        </div>
+                                                        <ul>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[100px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">Adn</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[100px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">Firdaus</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[100px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">Mawa</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                            <li>
+                                                                <div class="bg-white border border-emerald-200 p-3 rounded-xl shadow-sm inline-block min-w-[100px] mt-4">
+                                                                    <p class="font-black text-emerald-900 text-xs">Rayyan</p>
+                                                                    <p class="text-[9px] text-slate-500 font-bold mt-0.5">Guru Kelas</p>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    </li>
+                                                </ul>
+                                            </li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Semakan -->
+            <div id="semakan" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border-2 border-emerald-50 flex flex-col items-center relative overflow-hidden group">
+                        <div class="absolute -right-10 -top-10 text-lime-50 text-[12rem] z-0 transform rotate-12 group-hover:scale-110 group-hover:rotate-45 transition-transform duration-700"><i class="fa-solid fa-qrcode"></i></div>
+                        
+                        <h3 class="text-xl font-black text-emerald-900 mb-8 w-full text-center relative z-10">Imbas Kod QR Buku</h3>
+                        
+                        <div id="qr-placeholder" class="w-full max-w-sm aspect-square border-4 border-dashed border-lime-300 rounded-[3rem] flex flex-col items-center justify-center bg-lime-50/50 text-emerald-600 gap-6 transition-all duration-300 hover:border-emerald-400 hover:bg-emerald-50 hover:shadow-2xl cursor-pointer relative z-10 group-hover:scale-[1.02]" onclick="window.startQRScanner()">
+                            <div class="relative">
+                                <i class="fa-solid fa-qrcode text-8xl text-emerald-500 animate-pulse-soft"></i>
+                                <div class="absolute inset-0 border-4 border-lime-400 rounded-xl animate-ping opacity-20"></div>
+                            </div>
+                            <p class="font-black text-base tracking-wide bg-white px-6 py-2 rounded-full shadow-sm border border-lime-100">Tekan untuk mulakan kamera</p>
+                        </div>
+                        
+                        <div id="qr-reader" class="w-full max-w-sm rounded-[3rem] overflow-hidden hidden shadow-inner border-8 border-emerald-300 relative z-10 bg-black"></div>
+                        <button id="stop-camera-btn" onclick="window.stopQRScanner()" class="mt-8 bg-rose-100 text-rose-700 hover:bg-rose-500 hover:text-white px-8 py-3 rounded-full font-black text-sm hidden transition-all duration-300 shadow-sm relative z-10 flex items-center gap-2">
+                            <i class="fa-solid fa-camera-rotate"></i> Tutup Kamera
+                        </button>
+                    </div>
+
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border-2 border-emerald-50 flex flex-col">
+                        <h3 class="text-lg font-black text-emerald-900 mb-6 flex items-center gap-3">
+                            <div class="p-2 bg-emerald-100 text-emerald-600 rounded-xl"><i class="fa-solid fa-clock-rotate-left"></i></div> Rekod Sesi Terkini
+                        </h3>
+                        <div class="overflow-hidden rounded-2xl border-2 border-emerald-50 flex-1 bg-slate-50 relative">
+                            <div class="overflow-x-auto overflow-y-auto max-h-[450px] custom-scrollbar h-full absolute inset-0">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="bg-emerald-100/50 text-emerald-900 uppercase font-black text-[10px] tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                                        <tr>
+                                            <th class="px-5 py-4">Masa</th>
+                                            <th class="px-5 py-4">Buku & Peminjam</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="session-records" class="divide-y divide-emerald-50">
+                                        <tr>
+                                            <td colspan="2" class="px-5 py-10 text-center text-emerald-600/50 font-bold text-sm">
+                                                Tiada rekod dimasukkan dalam sesi ini.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Pengisian -->
+            <div id="pengisian" class="tab-content">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border-2 border-emerald-50 flex flex-col relative overflow-hidden group mb-8">
+                    <div class="flex items-center gap-4 mb-8 border-b-2 border-dashed border-emerald-100 pb-6">
+                        <div class="w-12 h-12 bg-lime-100 rounded-2xl flex items-center justify-center text-lime-600 text-xl shadow-inner"><i class="fa-solid fa-keyboard"></i></div>
+                        <h3 class="text-xl font-black text-emerald-900">Borang Pengagihan Pantas</h3>
+                    </div>
+
+                    <form id="pengisian-form" onsubmit="window.handleFormSubmit(event)">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 bg-emerald-50/30 p-6 rounded-3xl border border-emerald-100">
+                            <div>
+                                <label class="block text-xs font-black uppercase tracking-widest text-emerald-700 mb-3">1. Tahun & Kelas <span class="text-rose-500">*</span></label>
+                                <select id="form-class" required class="w-full border-2 border-emerald-100 rounded-2xl p-4 text-sm focus:ring-4 focus:ring-lime-100 focus:border-lime-500 outline-none font-extrabold text-emerald-900 bg-white cursor-pointer transition-all hover:border-emerald-300 shadow-sm" onchange="window.renderSubjectTable(); window.populateStudentDropdown();">
+                                    <option value="" disabled selected>-- Sila Pilih --</option>
+                                    <optgroup label="Tahun 1">
+                                        <option value="1 Setia">1 Setia</option><option value="1 Ikhlas">1 Ikhlas</option>
+                                    </optgroup>
+                                    <optgroup label="Tahun 2">
+                                        <option value="2 Maju">2 Maju</option><option value="2 Perkasa">2 Perkasa</option>
+                                    </optgroup>
+                                    <optgroup label="Tahun 3">
+                                        <option value="3 Aktif">3 Aktif</option><option value="3 Naim">3 Naim</option>
+                                    </optgroup>
+                                    <optgroup label="Tahun 4">
+                                        <option value="4 Gigih">4 Gigih</option><option value="4 Ehsan">4 Ehsan</option>
+                                    </optgroup>
+                                    <optgroup label="Tahun 5">
+                                        <option value="5 Mahir">5 Mahir</option><option value="5 Pintar">5 Pintar</option>
+                                    </optgroup>
+                                    <optgroup label="Tahun 6">
+                                        <option value="6 Arif">6 Arif</option><option value="6 Tekun">6 Tekun</option>
+                                    </optgroup>
+                                    <optgroup label="PPKI">
+                                        <option value="PPKI Adn">Adn</option><option value="PPKI Firdaus">Firdaus</option><option value="PPKI Mawa">Mawa</option><option value="PPKI Rayyan">Rayyan</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-black uppercase tracking-widest text-emerald-700 mb-3">2. Nama Murid <span class="text-rose-500">*</span></label>
+                                <select id="form-name" required class="w-full border-2 border-emerald-100 rounded-2xl p-4 text-sm focus:ring-4 focus:ring-lime-100 focus:border-lime-500 outline-none font-extrabold text-emerald-900 bg-white cursor-pointer transition-all hover:border-emerald-300 shadow-sm" onchange="window.populateExistingBooks()">
+                                    <option value="" disabled selected>-- Pilih Kelas Dahulu --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-3xl border-2 border-emerald-100 shadow-inner">
+                            <label class="block text-xs font-black uppercase tracking-widest text-emerald-800 mb-4">3. Mata Pelajaran & Pengisian Nombor Siri Buku <span class="text-rose-500">*</span></label>
+                            
+                            <div class="overflow-x-auto rounded-2xl border-2 border-emerald-50 bg-slate-50">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="bg-emerald-100/50 text-emerald-900 uppercase font-black text-[10px] tracking-widest">
+                                        <tr>
+                                            <th class="px-5 py-4 w-1/3">Mata Pelajaran</th>
+                                            <th class="px-5 py-4 w-2/3">No. Siri Buku (Cth: SPBT-123456)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subject-table-body" class="divide-y divide-emerald-50">
+                                        <tr>
+                                            <td colspan="2" class="px-5 py-10 text-center text-emerald-600/50 font-bold bg-white">
+                                                <i class="fa-solid fa-list-check text-4xl mb-3 text-emerald-200 block"></i>
+                                                Sila pilih Tahun & Kelas terlebih dahulu.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 mt-3 flex items-center gap-2"><i class="fa-solid fa-circle-info text-lime-500"></i> Klik pada ruangan teks dan imbas QR buku berulang kali untuk mengisi dengan pantas. Sekiranya nombor siri diubah, sistem akan mengemas kini rekod secara automatik.</p>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row justify-end pt-8 border-t border-emerald-50 mt-8 gap-4">
+                            <button type="button" onclick="window.clearFormInputs()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-8 py-4 rounded-2xl text-sm font-black transition-all duration-300 shadow-sm flex items-center gap-2 justify-center w-full sm:w-auto">
+                                <i class="fa-solid fa-eraser"></i> Kosongkan Borang
+                            </button>
+                            <button type="submit" id="submit-btn" class="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-white px-10 py-4 rounded-2xl text-base font-black transition-all duration-300 shadow-[0_8px_20px_-5px_rgba(34,197,94,0.4)] hover:shadow-[0_12px_25px_-5px_rgba(34,197,94,0.5)] transform hover:-translate-y-1 flex items-center gap-3 w-full sm:w-auto justify-center group">
+                                <i class="fa-solid fa-floppy-disk text-xl group-hover:scale-110 transition-transform"></i> Simpan Rekod Pengagihan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Tab 5: Cetakan -->
+            <div id="cetakan" class="tab-content">
+                <div class="bg-white rounded-3xl shadow-sm border-2 border-emerald-50 overflow-hidden">
+                    <div class="p-6 md:p-8 border-b-2 border-emerald-50 bg-gradient-to-r from-emerald-50/50 to-lime-50/50 flex flex-col lg:flex-row justify-between items-center gap-6 no-print relative overflow-hidden">
+                        <div class="absolute right-0 top-0 w-64 h-64 bg-lime-200 rounded-full blur-3xl opacity-20 -mr-20 -mt-20 pointer-events-none"></div>
+                        
+                        <div class="flex flex-wrap items-center gap-4 w-full lg:w-auto relative z-10">
+                            <select id="filter-tahun" class="border-2 border-emerald-200 rounded-2xl px-4 py-3 text-sm font-extrabold text-emerald-900 bg-white outline-none shadow-sm cursor-pointer" onchange="window.renderPrintTable()">
+                                <option value="Tahun 1">Tahun 1</option>
+                                <option value="Tahun 2">Tahun 2</option>
+                                <option value="Tahun 3">Tahun 3</option>
+                                <option value="Tahun 4">Tahun 4</option>
+                                <option value="Tahun 5">Tahun 5</option>
+                                <option value="Tahun 6">Tahun 6</option>
+                                <option value="PPKI">PPKI</option>
+                            </select>
+
+                            <select id="filter-kelas" class="border-2 border-emerald-200 rounded-2xl px-4 py-3 text-sm font-extrabold text-emerald-900 bg-white outline-none shadow-sm cursor-pointer" onchange="window.renderPrintTable()">
+                                <option value="Semua Kelas">Semua Kelas</option>
+                                <option value="1 Setia">1 Setia</option>
+                                <option value="1 Ikhlas">1 Ikhlas</option>
+                                <option value="2 Maju">2 Maju</option>
+                                <option value="2 Perkasa">2 Perkasa</option>
+                                <option value="3 Aktif">3 Aktif</option>
+                                <option value="3 Naim">3 Naim</option>
+                                <option value="4 Gigih">4 Gigih</option>
+                                <option value="4 Ehsan">4 Ehsan</option>
+                                <option value="5 Mahir">5 Mahir</option>
+                                <option value="5 Pintar">5 Pintar</option>
+                                <option value="6 Arif">6 Arif</option>
+                                <option value="6 Tekun">6 Tekun</option>
+                                <option value="Adn">Adn</option>
+                                <option value="Firdaus">Firdaus</option>
+                                <option value="Mawa">Mawa</option>
+                                <option value="Rayyan">Rayyan</option>
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-4 w-full lg:w-auto relative z-10">
+                            <button onclick="window.openPreviewModal('qr')" class="flex-1 sm:flex-none bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-white px-8 py-3.5 rounded-2xl text-sm font-black transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-1 flex items-center justify-center gap-3">
+                                <i class="fa-solid fa-qrcode text-lg"></i> Cetak QR Pukal
+                            </button>
+                            <button onclick="window.openPreviewModal('report')" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 text-white px-8 py-3.5 rounded-2xl text-sm font-black transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-1 flex items-center justify-center gap-3">
+                                <i class="fa-solid fa-print text-lg"></i> Cetak Laporan
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-6 md:p-8 overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-sm text-left border-collapse" id="cetakan-table">
+                            <thead class="bg-emerald-100/50 text-emerald-900 uppercase font-black text-[10px] tracking-widest border-b-4 border-emerald-100">
+                                <tr>
+                                    <th class="px-6 py-5 w-12 text-center rounded-tl-2xl">Bil</th>
+                                    <th class="px-6 py-5">No. Buku Teks</th>
+                                    <th class="px-6 py-5">Subjek</th>
+                                    <th class="px-6 py-5">Maklumat Agihan</th>
+                                    <th class="px-6 py-5 text-center">Kod QR</th>
+                                    <th class="px-6 py-5 text-center no-print rounded-tr-2xl">Tindakan</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-emerald-50 font-semibold" id="print-table-body">
+                                <tr><td colspan="6" class="text-center py-10 text-emerald-600 font-bold">Memuatkan data dari pangkalan data awan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="student-modal" class="fixed inset-0 bg-emerald-900/60 z-[100] hidden flex items-center justify-center backdrop-blur-sm no-print p-4">
+        <div class="bg-white rounded-[3rem] shadow-2xl max-w-sm w-full transform scale-95 transition-all duration-300" id="modal-content">
+            <div class="p-6 border-b border-lime-100 flex justify-between items-center bg-gradient-to-r from-emerald-500 to-lime-500 text-white rounded-t-[3rem] relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-2 opacity-20"><i class="fa-solid fa-hands-holding-child text-7xl"></i></div>
+                <h3 class="font-black text-lg relative z-10 flex items-center gap-3">
+                    <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center"><i class="fa-solid fa-address-card"></i></div> Perincian
+                </h3>
+                <button onclick="window.closeStudentModal()" class="text-white hover:text-lime-200 focus:outline-none relative z-10 bg-white/20 hover:bg-white/30 rounded-full w-10 h-10 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-8 relative mt-4">
+                <div class="absolute -top-12 left-1/2 transform -translate-x-1/2 w-24 h-24 bg-white rounded-full p-2 shadow-xl flex items-center justify-center border-4 border-lime-400 z-20">
+                    <div class="w-full h-full bg-lime-100 rounded-full flex items-center justify-center text-lime-600 text-4xl">
+                        <i class="fa-solid fa-user-graduate"></i>
+                    </div>
+                </div>
+                
+                <div class="text-center mb-8 mt-6">
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Nombor Buku</p>
+                    <p class="font-mono font-black text-emerald-900 text-3xl bg-lime-50 inline-block px-6 py-2 rounded-2xl border-2 border-lime-200 shadow-inner" id="modal-book-no">-</p>
+                    <p class="text-sm font-bold text-emerald-600 mt-3" id="modal-book-title">-</p>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-emerald-50/80 p-5 rounded-2xl border-2 border-emerald-100 hover:bg-emerald-100 transition-colors shadow-sm text-center">
+                        <p class="text-[10px] text-emerald-600 font-black uppercase mb-1 tracking-widest">Nama Penuh Murid</p>
+                        <p class="font-black text-emerald-950 text-base" id="modal-student-name">-</p>
+                    </div>
+                    <div class="flex gap-4">
+                        <div class="bg-emerald-50/80 p-5 rounded-2xl border-2 border-emerald-100 flex-1 hover:bg-emerald-100 transition-colors shadow-sm text-center">
+                            <p class="text-[10px] text-emerald-600 font-black uppercase mb-1 tracking-widest">Kelas</p>
+                            <p class="font-black text-emerald-950 text-base" id="modal-student-class">-</p>
+                        </div>
+                        <div class="bg-gradient-to-br from-lime-400 to-lime-500 p-5 rounded-2xl border-2 border-lime-500 flex-1 text-center flex flex-col justify-center items-center shadow-md">
+                            <p class="text-[10px] text-emerald-900 font-black uppercase mb-1 tracking-widest">Status</p>
+                            <p class="font-black text-white text-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-check-circle"></i> Aktif
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50 border-t border-slate-100 rounded-b-[3rem] flex flex-col sm:flex-row gap-3 justify-center">
+                <button onclick="window.deleteBookRecord()" id="modal-delete-btn" class="w-full sm:w-1/2 bg-rose-50 border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-500 hover:text-white text-rose-600 px-6 py-4 rounded-2xl font-black transition-all text-sm shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-trash-can"></i> Padam Rekod</button>
+                <button onclick="window.closeStudentModal()" class="w-full sm:w-1/2 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 px-6 py-4 rounded-2xl font-black transition-all text-sm shadow-sm">Tutup Paparan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Role Switcher / Login Modal -->
+    <div id="role-modal" class="fixed inset-0 bg-emerald-950/70 z-[120] hidden flex items-center justify-center backdrop-blur-md no-print p-4">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full p-8 relative transform scale-95 transition-all duration-300" id="role-modal-content">
+            <button onclick="window.closeRoleModal()" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-full w-10 h-10 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-times text-lg"></i>
+            </button>
+            
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-emerald-100 rounded-2xl mx-auto flex items-center justify-center text-emerald-600 text-3xl mb-4 shadow-inner">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+                <h3 class="text-xl font-black text-emerald-900">Pilih Paparan / Mod Akses</h3>
+                <p class="text-xs text-slate-500 font-bold mt-1">Sila pilih jenis paparan pengguna sistem SPBT.</p>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <button onclick="window.switchRole('umum')" class="w-full text-left p-4 rounded-2xl border-2 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all flex items-center gap-4 group">
+                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-eye"></i></div>
+                    <div>
+                        <p class="font-black text-emerald-900 text-sm">Paparan Umum</p>
+                        <p class="text-xs text-slate-500 font-bold">Akses: Dashboard, Carta Organisasi, Semakan Buku</p>
+                    </div>
+                </button>
+
+                <button onclick="window.promptGuruLogin()" class="w-full text-left p-4 rounded-2xl border-2 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all flex items-center gap-4 group">
+                    <div class="w-12 h-12 rounded-xl bg-lime-100 text-lime-700 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-chalkboard-user"></i></div>
+                    <div>
+                        <p class="font-black text-emerald-900 text-sm">Paparan Guru Kelas</p>
+                        <p class="text-xs text-slate-500 font-bold">Akses: Dashboard, Carta, Semakan, Pengisian Data</p>
+                    </div>
+                </button>
+
+                <button onclick="window.promptAdminLogin()" class="w-full text-left p-4 rounded-2xl border-2 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all flex items-center gap-4 group">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl group-hover:scale-110 transition-transform"><i class="fa-solid fa-lock"></i></div>
+                    <div>
+                        <p class="font-black text-emerald-900 text-sm">Paparan Admin (Penyelaras SPBT)</p>
+                        <p class="text-xs text-slate-500 font-bold">Akses Penuh: Semua Tab (Termasuk Laporan & Cetakan Pukal)</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Password Prompt Modal -->
+    <div id="admin-pass-modal" class="fixed inset-0 bg-emerald-950/70 z-[130] hidden flex items-center justify-center backdrop-blur-md no-print p-4">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-sm w-full p-8 relative transform scale-95 transition-all duration-300">
+            <h3 class="text-lg font-black text-emerald-900 mb-2">Log Masuk Admin</h3>
+            <p class="text-xs text-slate-500 font-bold mb-6">Sila masukkan kata laluan penyelaras SPBT.</p>
+            
+            <form onsubmit="window.verifyAdminPassword(event)">
+                <input type="password" id="admin-password-input" placeholder="Kata Laluan" required class="w-full border-2 border-emerald-100 rounded-2xl p-4 text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500 mb-6 shadow-inner">
+                <div class="flex gap-3">
+                    <button type="button" onclick="window.closeAdminModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl font-black text-sm">Batal</button>
+                    <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-2xl font-black text-sm shadow-md">Masuk</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Guru Kelas Password Prompt Modal -->
+    <div id="guru-pass-modal" class="fixed inset-0 bg-emerald-950/70 z-[130] hidden flex items-center justify-center backdrop-blur-md no-print p-4">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-sm w-full p-8 relative transform scale-95 transition-all duration-300">
+            <h3 class="text-lg font-black text-emerald-900 mb-2">Log Masuk Guru Kelas</h3>
+            <p class="text-xs text-slate-500 font-bold mb-6">Sila masukkan kata laluan guru kelas.</p>
+            
+            <form onsubmit="window.verifyGuruPassword(event)">
+                <input type="password" id="guru-password-input" placeholder="Kata Laluan" required class="w-full border-2 border-emerald-100 rounded-2xl p-4 text-sm font-bold text-emerald-900 outline-none focus:border-emerald-500 mb-6 shadow-inner">
+                <div class="flex gap-3">
+                    <button type="button" onclick="window.closeGuruModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-2xl font-black text-sm">Batal</button>
+                    <button type="submit" class="flex-1 bg-lime-600 hover:bg-lime-700 text-white py-3 rounded-2xl font-black text-sm shadow-md">Masuk</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="print-preview-modal" class="fixed inset-0 bg-emerald-950/80 z-[100] hidden flex items-center justify-center backdrop-blur-md no-print p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col transform scale-95 transition-all duration-300" id="preview-modal-content">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center bg-slate-900 text-white rounded-t-3xl shadow-sm relative overflow-hidden">
+                <div class="absolute right-0 top-0 opacity-10 text-7xl"><i class="fa-solid fa-print"></i></div>
+                <h3 class="font-black text-base flex items-center gap-3 relative z-10">
+                    <div class="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-lime-400"><i class="fa-solid fa-file-contract"></i></div> Pratonton Cetakan
+                </h3>
+                <button onclick="window.closePreviewModal()" class="text-slate-400 hover:text-white hover:bg-slate-700 w-10 h-10 rounded-xl flex items-center justify-center transition-colors relative z-10">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 md:p-10 overflow-y-auto flex-1 bg-slate-200 flex justify-center custom-scrollbar" id="preview-container-wrapper">
+                <div id="preview-content" class="bg-white shadow-2xl w-full min-h-[500px] transition-all rounded-sm border border-slate-300"></div>
+            </div>
+            
+            <div class="p-6 bg-white border-t border-slate-200 rounded-b-3xl flex justify-between items-center z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
+                <p class="text-sm font-bold text-slate-500 hidden sm:flex items-center gap-3">
+                    <i class="fa-solid fa-circle-info text-lime-500 text-2xl"></i> Sila semak paparan sebelum mencetak.
+                </p>
+                <div class="flex gap-4 w-full sm:w-auto">
+                    <button onclick="window.closePreviewModal()" class="flex-1 sm:flex-none bg-slate-100 border-2 border-slate-200 hover:bg-slate-200 text-slate-700 px-8 py-3.5 rounded-2xl font-black transition-colors text-sm">Batal</button>
+                    <button onclick="window.executePrint()" class="flex-1 sm:flex-none bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-white px-10 py-3.5 rounded-2xl font-black transition-all text-sm shadow-lg hover:shadow-xl flex items-center justify-center gap-3 transform hover:-translate-y-1">
+                        <i class="fa-solid fa-print text-lg"></i> Teruskan Cetak
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qr-print-container"></div>
+    <div id="toast-container" class="flex flex-col gap-3 no-print"></div>
+
+    <script type="text/javascript">
+        const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxfZgVcKMbzzXVPREBWItW098kmgsbB3o8BXnES74cRophXmg8r8AokiAqexxv2fXXn/exec'; 
+        
+        window.databaseByYear = {
+            'Tahun 1': {}, 'Tahun 2': {}, 'Tahun 3': {}, 
+            'Tahun 4': {}, 'Tahun 5': {}, 'Tahun 6': {}, 'PPKI': {}
+        };
+        
+        window.senaraiMurid = {};
+
+        window.dashboardData = {
+            keseluruhan: 12450,
+            rosakHilang: 15,
+            pengumuman: [
+                "Peringatan: Sila pastikan sambungan Google Sheets telah dikemaskini.",
+                "Bekalan buku teks PPKI telah selamat tiba di BOSS. Sedia untuk diagih."
+            ]
+        };
+        
+        let isDbReady = false;
+        window.html5QrCode = null;
+        let currentPrintType = '';
+        let currentModalBookId = ''; 
+        let currentRole = 'umum'; // 'umum', 'guru', 'admin'
+
+        const subjectListTahap1 = [
+            "Bahasa Melayu Jld 1", "Bahasa Melayu Jld 2", "Bahasa Inggeris", "Bahasa Arab",
+            "Matematik Jld 1", "Matematik Jld 2", "Sains", "Pendidikan Islam", "Pendidikan Moral",
+            "Pendidikan Jasmani dan Pendidikan Kesihatan (PJPK)", "Pendidikan Kesenian"
+        ];
+
+        const subjectListTahap2 = [
+            "Bahasa Melayu Jld 1", "Bahasa Melayu Jld 2", "Bahasa Inggeris", "Bahasa Arab",
+            "Matematik Jld 1", "Matematik Jld 2", "Sains", "Pendidikan Islam", "Pendidikan Moral",
+            "Pendidikan Jasmani dan Pendidikan Kesihatan (PJPK)", "Pendidikan Kesenian",
+            "Sejarah", "Reka Bentuk Dan Teknologi (RBT)"
+        ];
+
+        const subjectListPPKI = [
+            "Bahasa Melayu", "Bahasa Inggeris", "Matematik", "Pengurusan Kehidupan",
+            "Pengurusan diri", "Pendidikan Islam", "Pendidikan Moral",
+            "Pendidikan Jasmani dan Pendidikan Kesihatan (PJPK)", "Pendidikan Seni Kreatif", "Seni Visual dan Muzik"
+        ];
+
+        window.renderNavByRole = function() {
+            const desktopNav = document.getElementById('desktop-nav');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if(!desktopNav || !mobileMenu) return;
+
+            let tabs = [];
+            if (currentRole === 'umum') {
+                tabs = [
+                    { id: 'dashboard', name: 'Dashboard', icon: 'fa-chart-pie' },
+                    { id: 'carta', name: 'Carta', icon: 'fa-sitemap' },
+                    { id: 'semakan', name: 'Semakan', icon: 'fa-magnifying-glass-chart' }
+                ];
+                document.getElementById('user-role-label').innerText = 'Paparan Umum';
+                document.getElementById('user-avatar-initials').innerText = 'U';
+                document.getElementById('modal-delete-btn').classList.add('hidden');
+            } else if (currentRole === 'guru') {
+                tabs = [
+                    { id: 'dashboard', name: 'Dashboard', icon: 'fa-chart-pie' },
+                    { id: 'carta', name: 'Carta', icon: 'fa-sitemap' },
+                    { id: 'semakan', name: 'Semakan', icon: 'fa-magnifying-glass-chart' },
+                    { id: 'pengisian', name: 'Pengisian', icon: 'fa-keyboard' }
+                ];
+                document.getElementById('user-role-label').innerText = 'Guru Kelas';
+                document.getElementById('user-avatar-initials').innerText = 'GK';
+                document.getElementById('modal-delete-btn').classList.remove('hidden');
+            } else if (currentRole === 'admin') {
+                tabs = [
+                    { id: 'dashboard', name: 'Dashboard', icon: 'fa-chart-pie' },
+                    { id: 'carta', name: 'Carta', icon: 'fa-sitemap' },
+                    { id: 'semakan', name: 'Semakan', icon: 'fa-magnifying-glass-chart' },
+                    { id: 'pengisian', name: 'Pengisian', icon: 'fa-keyboard' },
+                    { id: 'cetakan', name: 'Cetakan', icon: 'fa-print' }
+                ];
+                document.getElementById('user-role-label').innerText = 'Penyelaras SPBT (Admin)';
+                document.getElementById('user-avatar-initials').innerText = 'CA';
+                document.getElementById('modal-delete-btn').classList.remove('hidden');
+            }
+
+            let desktopHTML = '';
+            let mobileHTML = '';
+
+            tabs.forEach(tab => {
+                desktopHTML += `
+                    <button onclick="window.switchTab('${tab.id}')" class="tab-btn flex items-center gap-1.5 px-2.5 py-2 lg:px-3.5 lg:py-2.5 rounded-2xl text-green-50 hover:bg-white/20 hover:text-white font-extrabold transition-all duration-300 text-xs lg:text-sm whitespace-nowrap" data-target="${tab.id}">
+                        <i class="fa-solid ${tab.icon}"></i> ${tab.name}
+                    </button>
+                `;
+                mobileHTML += `
+                    <button onclick="window.switchTab('${tab.id}')" class="tab-btn-mobile w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-green-50 hover:bg-emerald-700 font-extrabold transition-all" data-target="${tab.id}">
+                        <i class="fa-solid ${tab.icon} w-5"></i> ${tab.name}
+                    </button>
+                `;
+            });
+
+            desktopNav.innerHTML = desktopHTML;
+            mobileMenu.innerHTML = mobileHTML;
+
+            const activeTabEl = document.querySelector('.tab-content.active');
+            if (!activeTabEl || !tabs.some(t => t.id === activeTabEl.id)) {
+                window.switchTab(tabs[0].id);
+            } else {
+                window.switchTab(activeTabEl.id);
+            }
+        }
+
+        window.openRoleModal = function() {
+            const modal = document.getElementById('role-modal');
+            const content = document.getElementById('role-modal-content');
+            if(modal) modal.classList.remove('hidden');
+            setTimeout(() => { if(content) { content.classList.remove('scale-95'); content.classList.add('scale-100'); } }, 10);
+        }
+
+        window.closeRoleModal = function() {
+            const modal = document.getElementById('role-modal');
+            const content = document.getElementById('role-modal-content');
+            if(content) { content.classList.remove('scale-100'); content.classList.add('scale-95'); }
+            setTimeout(() => { if(modal) modal.classList.add('hidden'); }, 300);
+        }
+
+        window.switchRole = function(role) {
+            currentRole = role;
+            window.renderNavByRole();
+            window.closeRoleModal();
+            window.showToast(`Mod paparan ditukar kepada: ${role.toUpperCase()}`);
+        }
+
+        window.promptGuruLogin = function() {
+            window.closeRoleModal();
+            const modal = document.getElementById('guru-pass-modal');
+            if(modal) modal.classList.remove('hidden');
+        }
+
+        window.closeGuruModal = function() {
+            const modal = document.getElementById('guru-pass-modal');
+            if(modal) modal.classList.add('hidden');
+            document.getElementById('guru-password-input').value = '';
+        }
+
+        window.verifyGuruPassword = function(e) {
+            e.preventDefault();
+            const pass = document.getElementById('guru-password-input').value;
+            if (pass === 'gksepat') {
+                window.closeGuruModal();
+                window.switchRole('guru');
+                window.showToast('Log masuk Guru Kelas berjaya!', 'success');
+            } else {
+                window.showToast('Kata laluan guru kelas salah! Sila cuba lagi.', 'error');
+            }
+        }
+
+        window.promptAdminLogin = function() {
+            window.closeRoleModal();
+            const modal = document.getElementById('admin-pass-modal');
+            if(modal) modal.classList.remove('hidden');
+        }
+
+        window.closeAdminModal = function() {
+            const modal = document.getElementById('admin-pass-modal');
+            if(modal) modal.classList.add('hidden');
+            document.getElementById('admin-password-input').value = '';
+        }
+
+        window.verifyAdminPassword = function(e) {
+            e.preventDefault();
+            const pass = document.getElementById('admin-password-input').value;
+            if (pass === 'spbtsepat' || pass === 'spbt2026') {
+                window.closeAdminModal();
+                window.switchRole('admin');
+                window.showToast('Log masuk Admin berjaya!', 'success');
+            } else {
+                window.showToast('Kata laluan Admin salah! Sila cuba lagi.', 'error');
+            }
+        }
+
+        window.renderSubjectTable = function() {
+            const classSelect = document.getElementById('form-class');
+            const tbody = document.getElementById('subject-table-body');
+            const selectedClass = classSelect.value;
+            
+            tbody.innerHTML = '';
+            
+            if (!selectedClass) {
+                tbody.innerHTML = `<tr><td colspan="2" class="px-5 py-10 text-center text-emerald-600/50 font-bold bg-white">Sila pilih Tahun & Kelas terlebih dahulu.</td></tr>`;
+                return;
+            }
+            
+            let listToUse = subjectListTahap1;
+            if (selectedClass.startsWith('4') || selectedClass.startsWith('5') || selectedClass.startsWith('6')) {
+                listToUse = subjectListTahap2;
+            } else if (selectedClass.startsWith('PPKI') || ['Adn', 'Firdaus', 'Mawa', 'Rayyan'].includes(selectedClass)) {
+                listToUse = subjectListPPKI;
+            }
+            
+            listToUse.forEach(subj => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-lime-50/40 transition-colors bg-white group';
+                tr.innerHTML = `
+                    <td class="px-5 py-3 font-bold text-emerald-900 border-r border-emerald-50">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-book text-lime-500/50 group-hover:text-lime-500 transition-colors"></i> ${subj}
+                        </div>
+                    </td>
+                    <td class="px-5 py-2">
+                        <input type="text" class="book-input w-full border-2 border-emerald-100 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-lime-100 focus:border-lime-500 outline-none font-mono font-black text-emerald-900 bg-emerald-50/30 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-300 shadow-inner" placeholder="Cth: SPBT-123456" data-subject="${subj}" data-old-val="" onkeyup="window.formatSPBTInput(this)">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            window.populateExistingBooks();
+        }
+
+        window.populateExistingBooks = function() {
+            const classSelect = document.getElementById('form-class');
+            const nameSelect = document.getElementById('form-name');
+            const inputs = document.querySelectorAll('.book-input');
+            const submitBtn = document.getElementById('submit-btn');
+
+            inputs.forEach(input => {
+                input.value = '';
+                input.setAttribute('data-old-val', '');
+                input.classList.remove('border-lime-500', 'bg-lime-100/50', 'text-lime-900');
+                input.classList.add('border-emerald-100', 'bg-emerald-50/30');
+            });
+
+            const kelas = classSelect.value;
+            const nama = nameSelect.value;
+            if (!kelas || !nama) {
+                resetSubmitButton(submitBtn);
+                return;
+            }
+
+            let tahun = 'Tahun 1';
+            if (kelas.startsWith('2')) tahun = 'Tahun 2';
+            else if (kelas.startsWith('3')) tahun = 'Tahun 3';
+            else if (kelas.startsWith('4')) tahun = 'Tahun 4';
+            else if (kelas.startsWith('5')) tahun = 'Tahun 5';
+            else if (kelas.startsWith('6')) tahun = 'Tahun 6';
+            else if (kelas.startsWith('PPKI') || ['Adn', 'Firdaus', 'Mawa', 'Rayyan'].includes(kelas)) tahun = 'PPKI';
+
+            const currentYearData = window.databaseByYear[tahun] || {};
+            let hasExistingData = false;
+
+            for (const bookNo in currentYearData) {
+                const data = currentYearData[bookNo];
+                if (data.nama === nama && data.kelas === kelas) {
+                    const input = document.querySelector(`.book-input[data-subject="${data.title}"]`);
+                    if (input) {
+                        input.value = bookNo;
+                        input.setAttribute('data-old-val', bookNo);
+                        input.classList.remove('border-emerald-100', 'bg-emerald-50/30');
+                        input.classList.add('border-lime-500', 'bg-lime-100/50', 'text-lime-900');
+                        hasExistingData = true;
+                    }
+                }
+            }
+            
+            if (hasExistingData) {
+                submitBtn.innerHTML = '<i class="fa-solid fa-pen-to-square text-xl group-hover:scale-110 transition-transform"></i> Kemaskini Rekod Pengagihan';
+                submitBtn.className = 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-10 py-4 rounded-2xl text-base font-black transition-all duration-300 shadow-[0_8px_20px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_25px_-5px_rgba(245,158,11,0.5)] transform hover:-translate-y-1 flex items-center gap-3 w-full sm:w-auto justify-center group';
+            } else {
+                resetSubmitButton(submitBtn);
+            }
+        }
+        
+        function resetSubmitButton(btn) {
+            if(!btn) return;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk text-xl group-hover:scale-110 transition-transform"></i> Simpan Rekod Pengagihan';
+            btn.className = 'bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-white px-10 py-4 rounded-2xl text-base font-black transition-all duration-300 shadow-[0_8px_20px_-5px_rgba(34,197,94,0.4)] hover:shadow-[0_12px_25px_-5px_rgba(34,197,94,0.5)] transform hover:-translate-y-1 flex items-center gap-3 w-full sm:w-auto justify-center group';
+        }
+        
+        window.clearFormInputs = function() {
+            const inputs = document.querySelectorAll('.book-input');
+            inputs.forEach(input => {
+                input.value = '';
+                // Nota: Kita TIDAK memadam 'data-old-val' supaya jika user tekan Kemaskini, sistem akan tahu rekod mana nak di padam di pangkalan data awan.
+            });
+            window.showToast('Borang telah dikosongkan. Tekan Kemaskini untuk memadam kesemua rekod buku murid ini di pangkalan data.', 'success');
+        }
+
+        window.populateStudentDropdown = function() {
+            const classSelect = document.getElementById('form-class');
+            const nameSelect = document.getElementById('form-name');
+            const selectedClass = classSelect.value;
+            
+            nameSelect.innerHTML = '<option value="" disabled selected>-- Pilih Nama Murid --</option>';
+            
+            if (selectedClass && window.senaraiMurid && window.senaraiMurid[selectedClass]) {
+                const muridList = window.senaraiMurid[selectedClass];
+                if (muridList.length > 0) {
+                    muridList.sort().forEach(nama => {
+                        const opt = document.createElement('option');
+                        opt.value = nama;
+                        opt.textContent = nama;
+                        nameSelect.appendChild(opt);
+                    });
+                } else {
+                    nameSelect.innerHTML = '<option value="" disabled selected>-- Tiada rekod di Google Sheet --</option>';
+                }
+            } else if (selectedClass) {
+                nameSelect.innerHTML = '<option value="" disabled selected>-- Tiada rekod di Google Sheet --</option>';
+            }
+        }
+
+        window.initDataLoad = async function(isSync = false) {
+            const statusEl = document.getElementById('db-status');
+            
+            if (isSync && statusEl) {
+                statusEl.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin text-lime-300"></i> Menyegerak...';
+            }
+
+            if (!GOOGLE_SHEET_API_URL) {
+                window.databaseByYear = {
+                    'Tahun 1': {}, 'Tahun 2': {}, 
+                    'Tahun 3': { 'SPBT-00001': { nama: 'Muhammad Adam Bin Rosli', kelas: '3 Aktif', title: 'Bahasa Melayu Jld 1', masa: new Date().toISOString() } },
+                    'Tahun 4': {}, 'Tahun 5': {}, 'Tahun 6': {}, 'PPKI': {}
+                };
+                updateUIAfterDataLoad();
+                if(statusEl) statusEl.innerHTML = '<i class="fa-solid fa-hard-drive text-amber-300"></i> Local Mock Mode';
+                return;
+            }
+
+            try {
+                const response = await fetch(GOOGLE_SHEET_API_URL);
+                const data = await response.json();
+                
+                if (data.students) {
+                    window.databaseByYear = data.students;
+                    window.dashboardData = data.dashboard;
+                    if(data.senaraiMurid) window.senaraiMurid = data.senaraiMurid;
+                } else {
+                    window.databaseByYear = data;
+                }
+                
+                isDbReady = true;
+                if(statusEl) statusEl.innerHTML = '<i class="fa-solid fa-cloud-arrow-down text-lime-300"></i> Awan Dikemaskini';
+                
+                updateUIAfterDataLoad();
+                if (isSync) window.showToast('Data berjaya disegerakkan dengan Google Sheets!');
+            } catch (error) {
+                console.error("Gagal menyambung ke Google Sheets:", error);
+                if(statusEl) statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-300"></i> Ralat Sambungan Awan';
+                window.showToast('Gagal memuat turun data dari Google Sheets.', 'error');
+            }
+        }
+
+        function updateUIAfterDataLoad() {
+            updateDashboard();
+            window.renderPrintTable();
+            renderSessionRecords();
+            if (document.getElementById('form-class').value) {
+                const oldName = document.getElementById('form-name').value;
+                window.populateStudentDropdown();
+                if (oldName) document.getElementById('form-name').value = oldName;
+            }
+        }
+
+        window.handleFormSubmit = async function(event) {
+            event.preventDefault();
+            
+            const classSelect = document.getElementById('form-class');
+            const kelas = classSelect.value;
+            let tahun = 'Tahun 1';
+            if (kelas.startsWith('2')) tahun = 'Tahun 2';
+            else if (kelas.startsWith('3')) tahun = 'Tahun 3';
+            else if (kelas.startsWith('4')) tahun = 'Tahun 4';
+            else if (kelas.startsWith('5')) tahun = 'Tahun 5';
+            else if (kelas.startsWith('6')) tahun = 'Tahun 6';
+            else if (kelas.startsWith('PPKI') || ['Adn', 'Firdaus', 'Mawa', 'Rayyan'].includes(kelas)) tahun = 'PPKI';
+            
+            const nama = document.getElementById('form-name').value;
+            const inputs = document.querySelectorAll('.book-input');
+            const btn = document.getElementById('submit-btn');
+
+            let booksToProcess = [];
+
+            for (const input of inputs) {
+                const bookNo = input.value.trim().toUpperCase();
+                const subjek = input.getAttribute('data-subject');
+                const oldVal = input.getAttribute('data-old-val');
+
+                if (bookNo) {
+                    if (!/^SPBT-\d{1,6}$/.test(bookNo)) {
+                        window.showToast(`Format nombor buku tidak sah untuk subjek ${subjek}`, "error");
+                        input.focus();
+                        return;
+                    }
+
+                    let isDuplicate = false;
+                    let duplicateInfo = "";
+
+                    for (const checkTahun in window.databaseByYear) {
+                        for (const existingBook in window.databaseByYear[checkTahun]) {
+                            const existingData = window.databaseByYear[checkTahun][existingBook];
+                            if (existingBook === bookNo && (existingData.nama !== nama || existingData.kelas !== kelas)) {
+                                isDuplicate = true;
+                                duplicateInfo = `${existingData.nama} (${existingData.kelas})`;
+                                break;
+                            }
+                        }
+                        if (isDuplicate) break;
+                    }
+
+                    if (isDuplicate) {
+                        window.showToast(`Ralat! Buku ${bookNo} (${subjek}) telah diagihkan kepada ${duplicateInfo}. Sila guna nombor lain.`, "error");
+                        input.focus();
+                        return;
+                    }
+
+                    if (bookNo !== oldVal) {
+                        booksToProcess.push({ action: 'update', bookNo, subjek, oldVal });
+                    }
+                } else if (oldVal && !bookNo) {
+                    booksToProcess.push({ action: 'delete', bookNo: oldVal, subjek });
+                }
+            }
+
+            if (booksToProcess.length === 0) {
+                window.showToast('Tiada perubahan buku baru dikesan untuk disimpan.', 'error');
+                return;
+            }
+
+            const oriBtnHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xl"></i> Sedang Menyimpan...';
+            btn.disabled = true;
+            window.showToast('Sedang menyimpan dan menyegerak data ke Awan...');
+
+            const timestamp = new Date().toISOString();
+            if (!window.databaseByYear[tahun]) window.databaseByYear[tahun] = {};
+
+            for (const item of booksToProcess) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                if (item.action === 'delete') {
+                    delete window.databaseByYear[tahun][item.oldVal];
+                    if (GOOGLE_SHEET_API_URL) {
+                        try {
+                            await fetch(GOOGLE_SHEET_API_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                body: JSON.stringify({ action: 'delete', tahun: tahun, bookNo: item.oldVal })
+                            });
+                        } catch(e) { console.error(e); }
+                    }
+                } else if (item.action === 'update') {
+                    if (item.oldVal && item.oldVal !== item.bookNo) {
+                        delete window.databaseByYear[tahun][item.oldVal];
+                        if(GOOGLE_SHEET_API_URL) {
+                            try {
+                                await fetch(GOOGLE_SHEET_API_URL, { method: 'POST', body: JSON.stringify({action: 'delete', tahun: tahun, bookNo: item.oldVal}) });
+                            } catch(e) {}
+                        }
+                    }
+
+                    window.databaseByYear[tahun][item.bookNo] = { nama: nama, kelas: kelas, title: item.subjek, masa: timestamp };
+                    
+                    if (GOOGLE_SHEET_API_URL) {
+                        const payload = { action: 'update', tahun: tahun, bookNo: item.bookNo, oldBookNo: item.oldVal, nama: nama, kelas: kelas, subjek: item.subjek, masa: timestamp };
+                        try {
+                            await fetch(GOOGLE_SHEET_API_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                body: JSON.stringify(payload)
+                            });
+                        } catch(e) { console.error(e); }
+                    }
+                }
+            }
+            
+            btn.disabled = false;
+            updateUIAfterDataLoad();
+            window.populateExistingBooks(); // Refresh UI dan butang akan terus menjadi oren (Kemaskini)
+            
+            window.showToast('Tahniah! Semua rekod berjaya dikemaskini.');
+        }
+
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => {
+                if(el) el.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if(btn) {
+                    btn.classList.remove('bg-white', 'text-emerald-800', 'shadow-[0_4px_15px_-3px_rgba(0,0,0,0.1)]', 'scale-105', 'border', 'border-lime-200');
+                    btn.classList.add('text-green-50', 'hover:bg-white/20');
+                }
+            });
+            document.querySelectorAll('.tab-btn-mobile').forEach(btn => {
+                if(btn) {
+                    btn.classList.remove('bg-lime-400', 'text-emerald-900', 'shadow-md');
+                    btn.classList.add('text-green-50', 'hover:bg-emerald-700');
+                }
+            });
+            
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) targetContent.classList.add('active');
+            
+            document.querySelectorAll(`.tab-btn[data-target="${tabId}"]`).forEach(btn => {
+                if(btn) {
+                    btn.classList.remove('text-green-50', 'hover:bg-white/20');
+                    btn.classList.add('bg-white', 'text-emerald-800', 'shadow-[0_4px_15px_-3px_rgba(0,0,0,0.1)]', 'scale-105', 'border', 'border-lime-200');
+                }
+            });
+            document.querySelectorAll(`.tab-btn-mobile[data-target="${tabId}"]`).forEach(btn => {
+                if(btn) {
+                    btn.classList.remove('text-green-50', 'hover:bg-emerald-700');
+                    btn.classList.add('bg-lime-400', 'text-emerald-900', 'shadow-md');
+                }
+            });
+            
+            const titles = {
+                'dashboard': '<i class="fa-solid fa-sparkles text-lime-500"></i> Dashboard Utama',
+                'carta': '<i class="fa-solid fa-sitemap text-lime-500"></i> Carta Organisasi',
+                'semakan': '<i class="fa-solid fa-magnifying-glass-chart text-lime-500"></i> Semakan Buku Teks',
+                'pengisian': '<i class="fa-solid fa-keyboard text-lime-500"></i> Pengisian Data',
+                'cetakan': '<i class="fa-solid fa-print text-lime-500"></i> Laporan & Cetakan'
+            };
+            
+            const pageTitleEl = document.getElementById('page-title');
+            if (pageTitleEl && titles[tabId]) pageTitleEl.innerHTML = titles[tabId];
+            
+            const mobileMenuEl = document.getElementById('mobile-menu');
+            if (mobileMenuEl) mobileMenuEl.classList.add('hidden');
+
+            if (tabId !== 'semakan' && window.html5QrCode) window.stopQRScanner();
+        }
+
+        window.showToast = function(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            
+            const bg = type === 'success' ? 'bg-gradient-to-r from-emerald-500 to-lime-500 border-lime-400' : 'bg-gradient-to-r from-rose-500 to-red-600 border-rose-400';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-triangle-exclamation';
+
+            toast.className = `${bg} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 transform translate-y-10 opacity-0 transition-all duration-300 ease-out text-sm font-black border-2 backdrop-blur-sm`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-2xl drop-shadow"></i> <p>${message}</p>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0', 'scale-95');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        window.formatSPBTInput = function(input) {
+            let val = input.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+            if (val.startsWith('SPBT')) {
+                val = 'SPBT-' + val.substring(4).replace(/-/g, '');
+            } else if (/^\d+$/.test(val)) {
+                val = 'SPBT-' + val;
+            } else if (val.length > 0 && !val.startsWith('SPBT-')) {
+                val = 'SPBT-' + val.replace('SPBT', '').replace(/-/g, '');
+            }
+            if (val.length > 12) val = val.substring(0, 12);
+            input.value = val;
+        }
+
+        window.startQRScanner = function() {
+            const qrReader = document.getElementById('qr-reader');
+            const qrPlaceholder = document.getElementById('qr-placeholder');
+            const stopBtn = document.getElementById('stop-camera-btn');
+
+            if (qrPlaceholder) qrPlaceholder.classList.add('hidden');
+            if (qrReader) qrReader.classList.remove('hidden');
+            if (stopBtn) stopBtn.classList.remove('hidden');
+
+            window.html5QrCode = new Html5Qrcode("qr-reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            window.html5QrCode.start({ facingMode: "environment" }, config, 
+                (decodedText) => {
+                    window.stopQRScanner();
+                    playBeepSound();
+                    
+                    let bookId = decodedText;
+                    if (bookId.includes('?semak=')) {
+                        bookId = bookId.split('?semak=')[1].split('&')[0];
+                    }
+                    
+                    let found = false;
+                    for (const tahun in window.databaseByYear) {
+                        if (window.databaseByYear[tahun][bookId]) {
+                            found = true;
+                            window.openStudentModal(bookId, window.databaseByYear[tahun][bookId]);
+                            break;
+                        }
+                    }
+                    
+                    if (found) {
+                        window.showToast('Ceria! Kod berjaya diimbas.');
+                    } else {
+                        window.showToast(`Buku ${bookId} belum ditagging kepada mana-mana murid lagi.`, 'error');
+                    }
+                },
+                () => {}
+            ).catch((err) => {
+                window.stopQRScanner();
+                window.showToast('Gagal mengakses kamera peranti.', 'error');
+            });
+        }
+
+        window.stopQRScanner = function() {
+            if (window.html5QrCode) {
+                window.html5QrCode.stop().then(() => {
+                    window.html5QrCode.clear();
+                    window.html5QrCode = null;
+                }).catch(err => console.error(err));
+            }
+            const placeholderEl = document.getElementById('qr-placeholder');
+            const readerEl = document.getElementById('qr-reader');
+            const stopBtnEl = document.getElementById('stop-camera-btn');
+            if(placeholderEl) placeholderEl.classList.remove('hidden');
+            if(readerEl) readerEl.classList.add('hidden');
+            if(stopBtnEl) stopBtnEl.classList.add('hidden');
+        }
+
+        function playBeepSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            } catch(e) {}
+        }
+
+        window.openStudentModal = function(bookId, data) {
+            if (!data) return;
+            currentModalBookId = bookId;
+
+            const bNoEl = document.getElementById('modal-book-no');
+            const bTitleEl = document.getElementById('modal-book-title');
+            const sNameEl = document.getElementById('modal-student-name');
+            const sClassEl = document.getElementById('modal-student-class');
+
+            if(bNoEl) bNoEl.innerText = bookId;
+            if(bTitleEl) bTitleEl.innerText = data.title;
+            if(sNameEl) sNameEl.innerText = data.nama;
+            if(sClassEl) sClassEl.innerText = data.kelas;
+
+            const modal = document.getElementById('student-modal');
+            const content = document.getElementById('modal-content');
+            
+            if(modal) modal.classList.remove('hidden');
+            setTimeout(() => {
+                if(content) {
+                    content.classList.remove('scale-95');
+                    content.classList.add('scale-100');
+                }
+            }, 10);
+        }
+
+        window.closeStudentModal = function() {
+            currentModalBookId = '';
+            const modal = document.getElementById('student-modal');
+            const content = document.getElementById('modal-content');
+            
+            if(content) {
+                content.classList.remove('scale-100');
+                content.classList.add('scale-95');
+            }
+            setTimeout(() => {
+                if(modal) modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function getQRUrl(bookId) {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('semak', bookId);
+            return currentUrl.toString();
+        }
+
+        window.openPreviewModal = function(type) {
+            currentPrintType = type;
+            const modal = document.getElementById('print-preview-modal');
+            const contentBox = document.getElementById('preview-modal-content');
+            const previewArea = document.getElementById('preview-content');
+
+            if(previewArea) previewArea.innerHTML = ''; 
+
+            const selTahunEl = document.getElementById('filter-tahun');
+            const selKelasEl = document.getElementById('filter-kelas');
+            const selectedTahun = selTahunEl ? selTahunEl.value : 'Tahun 1';
+            const selectedKelas = selKelasEl ? selKelasEl.value : 'Semua Kelas';
+
+            if (type === 'qr') {
+                if(previewArea) previewArea.className = 'bg-white w-full min-h-[500px] p-8 flex flex-col items-center rounded-b-3xl';
+                
+                const controlsDiv = document.createElement('div');
+                controlsDiv.className = 'mb-6 p-4 bg-lime-50 rounded-2xl border border-lime-200 flex flex-wrap gap-4 items-center justify-center w-full no-print';
+                controlsDiv.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-black uppercase text-emerald-900">Awalan No. Siri:</label>
+                        <input type="text" id="qr-prefix-input" value="SPBT-" class="border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm font-mono font-bold w-28 bg-white outline-none">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-black uppercase text-emerald-900">No. Mula:</label>
+                        <input type="number" id="qr-start-input" value="1" min="0" class="border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm font-mono font-bold w-24 bg-white outline-none">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs font-black uppercase text-emerald-900">Kuantiti:</label>
+                        <input type="number" id="qr-count-input" value="30" min="1" max="200" class="border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm font-mono font-bold w-24 bg-white outline-none" onchange="window.updateQRPreviewGrid()">
+                    </div>
+                    <button onclick="window.updateQRPreviewGrid()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm">Jana Paparan</button>
+                `;
+                previewArea.appendChild(controlsDiv);
+
+                const gridContainer = document.createElement('div');
+                gridContainer.id = 'qr-grid-preview';
+                gridContainer.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 w-full';
+                previewArea.appendChild(gridContainer);
+
+                window.updateQRPreviewGrid();
+
+            } else if (type === 'report') {
+                if(previewArea) previewArea.className = 'bg-white max-w-5xl w-full min-h-[500px] p-10 mx-auto font-sans rounded-b-3xl shadow-xl';
+                
+                const header = document.createElement('div');
+                header.innerHTML = `
+                    <h2 class="text-xl font-black text-center mb-8 text-emerald-900 uppercase tracking-widest border-b-4 border-emerald-900 pb-3 inline-block mx-auto flex justify-center">LAPORAN AGIHAN SPBT ${selectedTahun.toUpperCase()}</h2>
+                    <div class="flex justify-between text-sm mb-6 pb-2 font-bold text-slate-700">
+                        <span class="bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">TAB SHEET: <span class="text-emerald-900">${selectedTahun}</span></span>
+                        <span class="bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">KELAS: <span class="text-emerald-900">${selectedKelas}</span></span>
+                    </div>
+                `;
+                if(previewArea) previewArea.appendChild(header);
+
+                const sourceTableEl = document.querySelector('#cetakan-table');
+                if (sourceTableEl) {
+                    const sourceTable = sourceTableEl.cloneNode(true);
+                    sourceTable.classList.remove('text-sm');
+                    sourceTable.classList.add('text-xs', 'border-2', 'border-slate-800');
+                    
+                    const ths = sourceTable.querySelectorAll('th');
+                    const trs = sourceTable.querySelectorAll('tbody tr');
+                    
+                    if(ths.length > 0) ths[ths.length - 1].remove(); 
+                    trs.forEach(tr => {
+                        const tds = tr.querySelectorAll('td');
+                        if(tds.length > 0) tds[tds.length - 1].remove(); 
+                        
+                        tr.classList.remove('hover:bg-lime-50/50');
+                        tr.querySelectorAll('td, th').forEach(cell => {
+                            cell.classList.add('border', 'border-slate-800', 'py-3', 'px-4');
+                        });
+                    });
+                    
+                    sourceTable.querySelectorAll('thead th').forEach(th => {
+                       th.classList.add('bg-slate-200', 'border-2', 'border-slate-800', 'py-3', 'px-4', 'text-slate-900', 'font-black');
+                       th.classList.remove('bg-emerald-100/50', 'text-emerald-900', 'border-b-4', 'border-emerald-100');
+                    });
+
+                    if(previewArea) previewArea.appendChild(sourceTable);
+                }
+            }
+
+            if(modal) modal.classList.remove('hidden');
+            setTimeout(() => {
+                if(contentBox) {
+                    contentBox.classList.remove('scale-95');
+                    contentBox.classList.add('scale-100');
+                }
+            }, 10);
+        }
+
+        window.closePreviewModal = function() {
+            const modal = document.getElementById('print-preview-modal');
+            const contentBox = document.getElementById('print-preview-modal');
+            
+            if(contentBox) {
+                const innerBox = document.getElementById('preview-modal-content');
+                if(innerBox) {
+                    innerBox.classList.remove('scale-100');
+                    innerBox.classList.add('scale-95');
+                }
+            }
+            setTimeout(() => {
+                if(modal) modal.classList.add('hidden');
+            }, 300);
+        }
+
+        window.updateQRPreviewGrid = function() {
+            const gridContainer = document.getElementById('qr-grid-preview');
+            if(!gridContainer) return;
+            gridContainer.innerHTML = '';
+
+            const prefix = document.getElementById('qr-prefix-input') ? document.getElementById('qr-prefix-input').value : 'SPBT-';
+            const startNum = parseInt(document.getElementById('qr-start-input') ? document.getElementById('qr-start-input').value : 1) || 1;
+            const count = parseInt(document.getElementById('qr-count-input') ? document.getElementById('qr-count-input').value : 30) || 30;
+
+            for(let i = 0; i < count; i++) {
+                const currentNum = startNum + i;
+                const formattedNum = String(currentNum).padStart(5, '0');
+                const bookId = prefix + formattedNum;
+                const qrUrl = encodeURIComponent(getQRUrl(bookId));
+
+                const label = document.createElement('div');
+                label.className = 'border-2 border-dashed border-slate-300 p-5 text-center rounded-3xl flex flex-col items-center justify-center bg-white shadow-sm';
+                label.innerHTML = `
+                    <div class="text-[9px] font-black text-slate-800 mb-3 tracking-widest uppercase border-b border-slate-200 pb-1 w-full">SPBT SK SIMPANG EMPAT</div>
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrUrl}" class="w-[100px] h-[100px] mb-3 shadow-md rounded-lg" alt="QR">
+                    <div class="font-mono font-black text-emerald-900 text-sm tracking-wide bg-lime-50 px-3 py-1 rounded-lg border border-lime-200">${bookId}</div>
+                    <div class="text-[10px] text-slate-400 font-bold leading-tight mt-1 uppercase">Sila Scan QR iniKosong</div>
+                `;
+                gridContainer.appendChild(label);
+            }
+        }
+
+        window.executePrint = function() {
+            window.closePreviewModal();
+            setTimeout(() => {
+                if (currentPrintType === 'qr') {
+                    const container = document.getElementById('qr-print-container');
+                    if(container) container.innerHTML = ''; 
+                    
+                    const prefix = document.getElementById('qr-prefix-input') ? document.getElementById('qr-prefix-input').value : 'SPBT-';
+                    const startNum = parseInt(document.getElementById('qr-start-input') ? document.getElementById('qr-start-input').value : 1) || 1;
+                    const count = parseInt(document.getElementById('qr-count-input') ? document.getElementById('qr-count-input').value : 30) || 30;
+
+                    for(let i = 0; i < count; i++) {
+                        const currentNum = startNum + i;
+                        const formattedNum = String(currentNum).padStart(5, '0');
+                        const bookId = prefix + formattedNum;
+                        const qrUrl = encodeURIComponent(getQRUrl(bookId));
+
+                        const label = document.createElement('div');
+                        label.className = 'qr-label font-sans';
+                        label.innerHTML = `
+                            <div class="text-[10px] font-black text-slate-800 mb-2 tracking-widest uppercase border-b border-slate-300 pb-1 w-full">SPBT SK SIMPANG EMPAT</div>
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${qrUrl}" class="w-[110px] h-[110px]" alt="QR">
+                            <div class="font-mono font-black text-black text-sm mt-2 border border-slate-300 px-2 py-0.5 rounded">${bookId}</div>
+                            <div class="text-[9px] text-slate-500 font-black leading-tight mt-1 px-2 uppercase">Pelekat Buku Kosong</div>
+                        `;
+                        container.appendChild(label);
+                    }
+
+                    document.body.classList.add('qr-print-mode');
+                    window.showToast('Menyediakan pelekat QR siri bersiri...');
+                    setTimeout(() => { window.print(); document.body.classList.remove('qr-print-mode'); }, 800);
+
+                } else if (currentPrintType === 'report') {
+                    window.showToast('Menyediakan fail Laporan...');
+                    window.print();
+                }
+            }, 400);
+        }
+
+        window.deleteBookRecord = async function() {
+            if (!currentModalBookId) return;
+            if (currentRole === 'umum') {
+                window.showToast('Akses ditolak. Sila log masuk sebagai Admin untuk memadam rekod.', 'error');
+                return;
+            }
+            if (!confirm(`Adakah anda pasti untuk memadam rekod buku ${currentModalBookId}?`)) return;
+
+            let targetTahun = '';
+            for (const tahun in window.databaseByYear) {
+                if (window.databaseByYear[tahun][currentModalBookId]) {
+                    targetTahun = tahun;
+                    break;
+                }
+            }
+
+            if (!targetTahun) return;
+
+            delete window.databaseByYear[targetTahun][currentModalBookId];
+            updateUIAfterDataLoad();
+            window.closeStudentModal();
+            window.showToast('Rekod sedang dipadam dari pangkalan data awan...');
+
+            if (GOOGLE_SHEET_API_URL) {
+                try {
+                    await fetch(GOOGLE_SHEET_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            action: 'delete',
+                            tahun: targetTahun,
+                            bookNo: currentModalBookId
+                        })
+                    });
+                    window.showToast('Rekod berjaya dipadam!', 'success');
+                } catch(e) {
+                    console.error("Gagal padam di awan", e);
+                    window.showToast("Gagal memadam rekod di Google Sheets.", "error");
+                    window.initDataLoad();
+                }
+            }
+        }
+
+        function updateDashboard() {
+            let totalDistributed = 0;
+            const quotas = { 'Tahun 1': 1500, 'Tahun 2': 1500, 'Tahun 3': 1500, 'Tahun 4': 1500, 'Tahun 5': 1500, 'Tahun 6': 1500, 'PPKI': 300 };
+            
+            const counts = {};
+            ['Tahun 1', 'Tahun 2', 'Tahun 3', 'Tahun 4', 'Tahun 5', 'Tahun 6', 'PPKI'].forEach(tahun => {
+                const count = Object.keys(window.databaseByYear[tahun] || {}).length;
+                counts[tahun] = count;
+                totalDistributed += count;
+            });
+            
+            const masterInventory = window.dashboardData.keseluruhan || 0;
+            const totalDamaged = window.dashboardData.rosakHilang || 0;
+            const bossStock = masterInventory - totalDistributed - totalDamaged;
+            
+            const dashTotalEl = document.getElementById('dash-total-books');
+            const dashDistEl = document.getElementById('dash-distributed');
+            const dashBossEl = document.getElementById('dash-boss-stock');
+            const dashDamagedEl = document.getElementById('dash-damaged');
+
+            if(dashTotalEl) dashTotalEl.innerText = masterInventory.toLocaleString('ms-MY');
+            if(dashDistEl) dashDistEl.innerText = totalDistributed.toLocaleString('ms-MY');
+            if(dashBossEl) dashBossEl.innerText = bossStock.toLocaleString('ms-MY');
+            if(dashDamagedEl) dashDamagedEl.innerText = totalDamaged.toLocaleString('ms-MY');
+            
+            const container = document.getElementById('dashboard-progress-container');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            ['Tahun 1', 'Tahun 2', 'Tahun 3', 'Tahun 4', 'Tahun 5', 'Tahun 6', 'PPKI'].forEach(tahun => {
+                const mapId = tahun === 'PPKI' ? 'ppki' : 't' + tahun.split(' ')[1];
+                const count = counts[tahun];
+                const quota = quotas[tahun];
+                const pct = Math.min(100, Math.round((count / quota) * 100)) || 0;
+                const color = 'from-emerald-400 to-lime-400';
+                
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs font-extrabold text-slate-500 mb-2 uppercase tracking-wide">
+                        <span>${tahun}</span><span id="stat-${mapId}">${count} Buku (${pct}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-3.5 shadow-inner overflow-hidden border border-slate-200/50">
+                        <div class="bg-gradient-to-r ${color} h-full rounded-full transition-all duration-1000 relative" style="width: ${pct}%" id="bar-${mapId}">
+                            <div class="absolute inset-0 bg-white/20" style="background-image: linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent); background-size: 1rem 1rem;"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            
+            const annContainer = document.getElementById('announcement-container');
+            if (annContainer && window.dashboardData && window.dashboardData.pengumuman) {
+                annContainer.innerHTML = '';
+                const icons = ['fa-circle-info text-blue-400', 'fa-check-circle text-lime-500', 'fa-cloud-arrow-up text-emerald-500', 'fa-bell text-amber-500'];
+                const bgs = ['bg-blue-50 text-blue-900 border-blue-100', 'bg-lime-50 text-emerald-900 border-lime-200', 'bg-emerald-50 text-emerald-900 border-emerald-200', 'bg-amber-50 text-amber-900 border-amber-200'];
+
+                window.dashboardData.pengumuman.forEach((text, index) => {
+                    const styleIdx = index % bgs.length;
+                    annContainer.innerHTML += `
+                        <div class="${bgs[styleIdx]} p-5 rounded-2xl text-sm font-bold border shadow-sm flex gap-4 transform transition-all hover:scale-[1.02]">
+                            <i class="fa-solid ${icons[styleIdx]} text-2xl mt-0.5"></i> 
+                            <p>${text}</p>
+                        </div>
+                    `;
+                });
+            }
+        }
+        
+        window.renderPrintTable = function() {
+            const tbody = document.getElementById('print-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            const selTahunEl = document.getElementById('filter-tahun');
+            const selKelasEl = document.getElementById('filter-kelas');
+            const selectedTahun = selTahunEl ? selTahunEl.value : 'Tahun 1';
+            const selectedKelas = selKelasEl ? selKelasEl.value : 'Semua Kelas';
+            const currentYearData = window.databaseByYear[selectedTahun] || {};
+            
+            let count = 1;
+            const entries = Object.entries(currentYearData).sort((a,b) => (a[0] > b[0] ? 1 : -1));
+            
+            entries.forEach(([bookId, data]) => {
+                if (selectedKelas !== 'Semua Kelas' && data.kelas !== selectedKelas) return;
+                
+                const dateStr = new Date(data.masa).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+                const qrUrl = encodeURIComponent(getQRUrl(bookId));
+                
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-lime-50/50 transition-colors group';
+                tr.innerHTML = `
+                    <td class="px-6 py-5 text-center text-slate-400 font-bold">${count++}</td>
+                    <td class="px-6 py-5 font-mono font-black text-emerald-900 text-base">${bookId}</td>
+                    <td class="px-6 py-5 text-emerald-800 font-bold uppercase">${data.title}</td>
+                    <td class="px-6 py-5">
+                        <div class="font-black text-emerald-950 mb-1">${data.nama}</div>
+                        <div class="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 inline-block px-2 py-0.5 rounded">${data.kelas} • ${dateStr}</div>
+                    </td>
+                    <td class="px-6 py-5 text-center">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=45x45&data=${qrUrl}" class="inline-block rounded-lg shadow-sm border border-slate-200 opacity-90 group-hover:scale-125 transition-transform duration-300 cursor-pointer" onclick="window.openStudentModal('${bookId}', ${JSON.stringify(data).replace(/"/g, '&quot;')})" alt="QR">
+                    </td>
+                    <td class="px-6 py-5 text-center no-print">
+                        <button onclick="window.openStudentModal('${bookId}', ${JSON.stringify(data).replace(/"/g, '&quot;')})" class="bg-white text-emerald-600 border-2 border-emerald-200 hover:bg-emerald-50 px-5 py-2 rounded-xl font-black text-xs transition-colors shadow-sm hover:shadow-md transform hover:-translate-y-0.5">Semak Nama</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            if (count === 1) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-10 text-center text-slate-400 font-black text-lg">Tiada rekod ditemui untuk saringan tab ${selectedTahun}.</td></tr>`;
+            }
+        }
+        
+        function renderSessionRecords() {
+            const tbody = document.getElementById('session-records');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            let allEntries = [];
+            for (const tahun in window.databaseByYear) {
+                for (const bookNo in window.databaseByYear[tahun]) {
+                    allEntries.push({ bookNo, ...window.databaseByYear[tahun][bookNo] });
+                }
+            }
+            
+            const entries = allEntries
+                .sort((a, b) => new Date(b.masa) - new Date(a.masa))
+                .slice(0, 15); 
+                
+            if(entries.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" class="px-5 py-10 text-center text-emerald-600/50 font-bold text-sm">Tiada rekod dimasukkan.</td></tr>`;
+                return;
+            }
+            
+            entries.forEach((data) => {
+                const time = new Date(data.masa).toLocaleTimeString('ms-MY', { hour: '2-digit', minute:'2-digit' });
+                const tr = document.createElement('tr');
+                tr.className = 'border-b-2 border-emerald-50/50 hover:bg-white/80 transition-colors font-semibold';
+                tr.innerHTML = `
+                    <td class="px-5 py-4 text-emerald-600/70 font-black text-xs bg-emerald-50/30">${time}</td>
+                    <td class="px-5 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="font-mono font-black text-emerald-900 bg-lime-100 px-2 py-1 rounded-lg text-xs border border-lime-200">${data.bookNo}</div>
+                            <div>
+                                <div class="font-bold text-emerald-950">${data.nama}</div>
+                                <div class="text-[10px] text-slate-500 font-bold uppercase">${data.title} • ${data.kelas}</div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        const mobileBtn = document.getElementById('mobile-menu-btn');
+        if (mobileBtn) {
+            mobileBtn.addEventListener('click', () => {
+                const menu = document.getElementById('mobile-menu');
+                if (menu) menu.classList.toggle('hidden');
+            });
+        }
+
+        const studentModalEl = document.getElementById('student-modal');
+        if (studentModalEl) {
+            studentModalEl.addEventListener('click', (e) => {
+                if (e.target === studentModalEl) window.closeStudentModal();
+            });
+        }
+        
+        const previewModalEl = document.getElementById('print-preview-modal');
+        if (previewModalEl) {
+            previewModalEl.addEventListener('click', (e) => {
+                if (e.target === previewModalEl) window.closePreviewModal();
+            });
+        }
+
+        const roleModalEl = document.getElementById('role-modal');
+        if (roleModalEl) {
+            roleModalEl.addEventListener('click', (e) => {
+                if (e.target === roleModalEl) window.closeRoleModal();
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initDataLoad();
+            window.renderNavByRole();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const semakId = urlParams.get('semak');
+            
+            if (semakId) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => {
+                    let foundData = null;
+                    for (const tahun in window.databaseByYear) {
+                        if (window.databaseByYear[tahun][semakId]) {
+                            foundData = window.databaseByYear[tahun][semakId];
+                            break;
+                        }
+                    }
+                    if(foundData) {
+                        window.openStudentModal(semakId, foundData);
+                        window.switchTab('semakan'); 
+                    } else {
+                        window.switchTab('semakan');
+                        window.showToast(`Buku ${semakId} kosong / belum ditagging kepada murid.`, 'error');
+                    }
+                }, 1500);
+            }
+        });
+    </script>
+</body>
+</html>
