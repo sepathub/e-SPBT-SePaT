@@ -262,7 +262,7 @@
                 </div>
             </div>
 
-            <!-- Tab 2: Carta Organisasi with 3-3-1 Layout Arrangement and Class Teachers -->
+            <!-- Tab 2: Carta Organisasi -->
             <div id="carta" class="tab-content">
                 <div class="bg-white p-6 md:p-10 rounded-3xl shadow-sm border-2 border-emerald-50 overflow-x-auto flex justify-center items-center min-h-[75vh]">
                     <div class="org-chart min-w-[1400px] pb-10 px-4">
@@ -612,10 +612,10 @@
                                 <option value="5 Pintar">5 Pintar</option>
                                 <option value="6 Arif">6 Arif</option>
                                 <option value="6 Tekun">6 Tekun</option>
-                                <option value="Adn">Adn</option>
-                                <option value="Firdaus">Firdaus</option>
-                                <option value="Mawa">Mawa</option>
-                                <option value="Rayyan">Rayyan</option>
+                                <option value="PPKI Adn">Adn</option>
+                                <option value="PPKI Firdaus">Firdaus</option>
+                                <option value="PPKI Mawa">Mawa</option>
+                                <option value="PPKI Rayyan">Rayyan</option>
                             </select>
                         </div>
 
@@ -1061,7 +1061,11 @@
 
             for (const bookNo in currentYearData) {
                 const data = currentYearData[bookNo];
-                if (data.nama === nama && data.kelas === kelas) {
+                // Pastikan padanan nama dan kelas (buang perkataan PPKI pada padanan jika ada)
+                const checkKelas = data.kelas.replace('PPKI ', '');
+                const selKelas = kelas.replace('PPKI ', '');
+                
+                if (data.nama === nama && checkKelas === selKelas) {
                     const input = document.querySelector(`.book-input[data-subject="${data.title}"]`);
                     if (input) {
                         input.value = bookNo;
@@ -1091,7 +1095,7 @@
             const inputs = document.querySelectorAll('.book-input');
             inputs.forEach(input => {
                 input.value = '';
-                // Nota: Kita TIDAK memadam 'data-old-val' supaya jika user tekan Kemaskini, sistem akan tahu rekod mana nak di padam di pangkalan data awan.
+                // Nota: Kita TIDAK memadam 'data-old-val' supaya jika user tekan Kemaskini, sistem akan tahu rekod mana nak dipadam dari pangkalan data awan.
             });
             window.showToast('Borang telah dikosongkan. Tekan Kemaskini untuk memadam kesemua rekod buku murid ini di pangkalan data.', 'success');
         }
@@ -1103,8 +1107,11 @@
             
             nameSelect.innerHTML = '<option value="" disabled selected>-- Pilih Nama Murid --</option>';
             
-            if (selectedClass && window.senaraiMurid && window.senaraiMurid[selectedClass]) {
-                const muridList = window.senaraiMurid[selectedClass];
+            // Normalize class name for matching with data from Sheets (remove 'PPKI ' prefix if it exists in the dropdown value)
+            const matchClass = selectedClass ? selectedClass.replace('PPKI ', '') : '';
+            
+            if (matchClass && window.senaraiMurid && window.senaraiMurid[matchClass]) {
+                const muridList = window.senaraiMurid[matchClass];
                 if (muridList.length > 0) {
                     muridList.sort().forEach(nama => {
                         const opt = document.createElement('option');
@@ -1116,7 +1123,7 @@
                     nameSelect.innerHTML = '<option value="" disabled selected>-- Tiada rekod di Google Sheet --</option>';
                 }
             } else if (selectedClass) {
-                nameSelect.innerHTML = '<option value="" disabled selected>-- Tiada rekod di Google Sheet --</option>';
+                nameSelect.innerHTML = '<option value="" disabled selected>-- Tiada murid dlm rekod. Sila isi di Google Sheet --</option>';
             }
         }
 
@@ -1170,6 +1177,7 @@
                 const oldName = document.getElementById('form-name').value;
                 window.populateStudentDropdown();
                 if (oldName) document.getElementById('form-name').value = oldName;
+                window.populateExistingBooks(); // Ensure colors/button updates
             }
         }
 
@@ -1177,14 +1185,17 @@
             event.preventDefault();
             
             const classSelect = document.getElementById('form-class');
-            const kelas = classSelect.value;
+            const kelasVal = classSelect.value;
+            // Padam PPKI prefix jika ada utk simpanan kemas
+            const kelas = kelasVal.replace('PPKI ', '');
+
             let tahun = 'Tahun 1';
-            if (kelas.startsWith('2')) tahun = 'Tahun 2';
-            else if (kelas.startsWith('3')) tahun = 'Tahun 3';
-            else if (kelas.startsWith('4')) tahun = 'Tahun 4';
-            else if (kelas.startsWith('5')) tahun = 'Tahun 5';
-            else if (kelas.startsWith('6')) tahun = 'Tahun 6';
-            else if (kelas.startsWith('PPKI') || ['Adn', 'Firdaus', 'Mawa', 'Rayyan'].includes(kelas)) tahun = 'PPKI';
+            if (kelasVal.startsWith('2')) tahun = 'Tahun 2';
+            else if (kelasVal.startsWith('3')) tahun = 'Tahun 3';
+            else if (kelasVal.startsWith('4')) tahun = 'Tahun 4';
+            else if (kelasVal.startsWith('5')) tahun = 'Tahun 5';
+            else if (kelasVal.startsWith('6')) tahun = 'Tahun 6';
+            else if (kelasVal.startsWith('PPKI') || ['Adn', 'Firdaus', 'Mawa', 'Rayyan'].includes(kelasVal)) tahun = 'PPKI';
             
             const nama = document.getElementById('form-name').value;
             const inputs = document.querySelectorAll('.book-input');
@@ -1198,6 +1209,7 @@
                 const oldVal = input.getAttribute('data-old-val');
 
                 if (bookNo) {
+                    // Update regex validasi ke 6 digit
                     if (!/^SPBT-\d{1,6}$/.test(bookNo)) {
                         window.showToast(`Format nombor buku tidak sah untuk subjek ${subjek}`, "error");
                         input.focus();
@@ -1234,11 +1246,10 @@
             }
 
             if (booksToProcess.length === 0) {
-                window.showToast('Tiada perubahan buku baru dikesan untuk disimpan.', 'error');
+                window.showToast('Tiada perubahan buku baru dikesan untuk disimpan/dikemaskini.', 'error');
                 return;
             }
 
-            const oriBtnHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xl"></i> Sedang Menyimpan...';
             btn.disabled = true;
             window.showToast('Sedang menyimpan dan menyegerak data ke Awan...');
@@ -1246,6 +1257,7 @@
             const timestamp = new Date().toISOString();
             if (!window.databaseByYear[tahun]) window.databaseByYear[tahun] = {};
 
+            // Proses satu per satu dengan delay 500ms utk elak Sheets langgar
             for (const item of booksToProcess) {
                 await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -1266,6 +1278,8 @@
                         if(GOOGLE_SHEET_API_URL) {
                             try {
                                 await fetch(GOOGLE_SHEET_API_URL, { method: 'POST', body: JSON.stringify({action: 'delete', tahun: tahun, bookNo: item.oldVal}) });
+                                // Ekstra delay lepas delete sblm insert baru
+                                await new Promise(resolve => setTimeout(resolve, 500)); 
                             } catch(e) {}
                         }
                     }
@@ -1287,7 +1301,7 @@
             
             btn.disabled = false;
             updateUIAfterDataLoad();
-            window.populateExistingBooks(); // Refresh UI dan butang akan terus menjadi oren (Kemaskini)
+            window.populateExistingBooks(); // Refresh UI agar butang kembali kepada oren
             
             window.showToast('Tahniah! Semua rekod berjaya dikemaskini.');
         }
@@ -1371,6 +1385,7 @@
             } else if (val.length > 0 && !val.startsWith('SPBT-')) {
                 val = 'SPBT-' + val.replace('SPBT', '').replace(/-/g, '');
             }
+            // Update input limit to 12 chars to support SPBT-123456
             if (val.length > 12) val = val.substring(0, 12);
             input.value = val;
         }
@@ -1487,9 +1502,10 @@
         }
 
         function getQRUrl(bookId) {
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('semak', bookId);
-            return currentUrl.toString();
+            const baseUrl = 'https://spbt.sepathub.com/';
+            const url = new URL(baseUrl);
+            url.searchParams.set('semak', bookId);
+            return url.toString();
         }
 
         window.openPreviewModal = function(type) {
@@ -1612,7 +1628,7 @@
 
             for(let i = 0; i < count; i++) {
                 const currentNum = startNum + i;
-                const formattedNum = String(currentNum).padStart(5, '0');
+                const formattedNum = String(currentNum).padStart(5, '0'); // Ditukar kembali kepada 5 digit (SPBT-XXXXX)
                 const bookId = prefix + formattedNum;
                 const qrUrl = encodeURIComponent(getQRUrl(bookId));
 
@@ -1622,7 +1638,7 @@
                     <div class="text-[9px] font-black text-slate-800 mb-3 tracking-widest uppercase border-b border-slate-200 pb-1 w-full">SPBT SK SIMPANG EMPAT</div>
                     <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrUrl}" class="w-[100px] h-[100px] mb-3 shadow-md rounded-lg" alt="QR">
                     <div class="font-mono font-black text-emerald-900 text-sm tracking-wide bg-lime-50 px-3 py-1 rounded-lg border border-lime-200">${bookId}</div>
-                    <div class="text-[10px] text-slate-400 font-bold leading-tight mt-1 uppercase">Sila Scan QR iniKosong</div>
+                    <div class="text-[10px] text-slate-400 font-bold leading-tight mt-1 uppercase">Sila Tag No Siri Ini</div>
                 `;
                 gridContainer.appendChild(label);
             }
@@ -1641,7 +1657,7 @@
 
                     for(let i = 0; i < count; i++) {
                         const currentNum = startNum + i;
-                        const formattedNum = String(currentNum).padStart(5, '0');
+                        const formattedNum = String(currentNum).padStart(5, '0'); // Mengikut format SPBT-XXXXX (5 digit)
                         const bookId = prefix + formattedNum;
                         const qrUrl = encodeURIComponent(getQRUrl(bookId));
 
@@ -1793,7 +1809,11 @@
             const entries = Object.entries(currentYearData).sort((a,b) => (a[0] > b[0] ? 1 : -1));
             
             entries.forEach(([bookId, data]) => {
-                if (selectedKelas !== 'Semua Kelas' && data.kelas !== selectedKelas) return;
+                // Padam awalan PPKI pada padanan kelas cetakan jika wujud
+                const padanKelasData = data.kelas.replace('PPKI ', '');
+                const padanKelasFilter = selectedKelas.replace('PPKI ', '');
+                
+                if (selectedKelas !== 'Semua Kelas' && padanKelasData !== padanKelasFilter) return;
                 
                 const dateStr = new Date(data.masa).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' });
                 const qrUrl = encodeURIComponent(getQRUrl(bookId));
@@ -1893,31 +1913,34 @@
             });
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initDataLoad();
+        window.addEventListener('DOMContentLoaded', async () => {
             window.renderNavByRole();
+            
+            // Tunggu data siap dimuat turun dari Google Sheets terlebih dahulu
+            await window.initDataLoad();
             
             const urlParams = new URLSearchParams(window.location.search);
             const semakId = urlParams.get('semak');
             
             if (semakId) {
+                // Padamkan param dari URL supaya jika di-refresh, ia tak ulang paparan
                 window.history.replaceState({}, document.title, window.location.pathname);
-                setTimeout(() => {
-                    let foundData = null;
-                    for (const tahun in window.databaseByYear) {
-                        if (window.databaseByYear[tahun][semakId]) {
-                            foundData = window.databaseByYear[tahun][semakId];
-                            break;
-                        }
+                
+                let foundData = null;
+                for (const tahun in window.databaseByYear) {
+                    if (window.databaseByYear[tahun][semakId]) {
+                        foundData = window.databaseByYear[tahun][semakId];
+                        break;
                     }
-                    if(foundData) {
-                        window.openStudentModal(semakId, foundData);
-                        window.switchTab('semakan'); 
-                    } else {
-                        window.switchTab('semakan');
-                        window.showToast(`Buku ${semakId} kosong / belum ditagging kepada murid.`, 'error');
-                    }
-                }, 1500);
+                }
+                
+                if(foundData) {
+                    window.switchTab('semakan'); 
+                    window.openStudentModal(semakId, foundData);
+                } else {
+                    window.switchTab('semakan');
+                    window.showToast(`Buku ${semakId} kosong / belum ditagging kepada murid.`, 'error');
+                }
             }
         });
     </script>
